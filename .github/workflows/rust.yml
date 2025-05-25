@@ -3,7 +3,7 @@ name: MacOS & Linux Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'  # Triggers on version tags like v1.0.0
 
 permissions:
   contents: write
@@ -15,41 +15,50 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            archive: student_budget-linux.tar.gz
+            archive_suffix: linux
 
           - target: x86_64-apple-darwin
             os: macos-latest
-            archive: student_budget-macos.tar.gz
+            archive_suffix: macos
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: 📥 Checkout Code
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
       - name: 🦀 Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: ⚙️ Add Target
+      - name: ⚙️ Add Build Target
         run: rustup target add ${{ matrix.target }}
 
       - name: 📦 Build Binary
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: 🏷 Get Binary Name from Cargo
-        id: cargo-meta
-        run: |
-          echo "name=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')" >> $GITHUB_OUTPUT
+      - name: 🏷 Get Binary Name
+        id: binary
+        run: echo "name=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')" >> $GITHUB_OUTPUT
 
-      - name: 📁 Prepare Release Archive
+      - name: 📁 Package .tar.gz
         run: |
           mkdir -p release
-          cp target/${{ matrix.target }}/release/${{ steps.cargo-meta.outputs.name }} release/
-          tar -czvf release/${{ matrix.archive }} -C release ${{ steps.cargo-meta.outputs.name }}
+          BIN_NAME=${{ steps.binary.outputs.name }}
+          BIN_PATH=target/${{ matrix.target }}/release/$BIN_NAME
+
+          echo "Looking for binary at: $BIN_PATH"
+          if [ ! -f "$BIN_PATH" ]; then
+            echo "❌ Binary not found at $BIN_PATH"
+            exit 1
+          fi
+
+          cp "$BIN_PATH" release/
+          tar -czvf "release/${BIN_NAME}-${{ matrix.archive_suffix }}.tar.gz" -C release "$BIN_NAME"
 
       - name: 🚀 Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/${{ matrix.archive }}
+          files: |
+            release/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
