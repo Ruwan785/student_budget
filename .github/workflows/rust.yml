@@ -3,20 +3,25 @@ name: MacOS & Linux Release
 on:
   push:
     tags:
-      - 'v*'  # Runs when a tag like v1.0.0 is pushed
+      - 'v*'
 
 permissions:
-  contents: write  # Allows creating GitHub releases
+  contents: write
 
 jobs:
   build:
     strategy:
       matrix:
-        target:
-          - x86_64-apple-darwin       # ✅ macOS
-          - x86_64-unknown-linux-gnu  # ✅ Linux
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: currency_converter-linux.tar.gz
 
-    runs-on: ${{ matrix.target == 'x86_64-apple-darwin' && 'macos-latest' || 'ubuntu-latest' }}
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: currency_converter-macos.tar.gz
+
+    runs-on: ${{ matrix.os }}
 
     env:
       BINARY_NAME: currency_converter
@@ -28,26 +33,21 @@ jobs:
       - name: 🦀 Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: ⚙️ Install Required Rust Targets
+      - name: ⚙️ Install Required Target
         run: rustup target add ${{ matrix.target }}
 
-      - name: 🏗️ Build Rust Binary
+      - name: 🏗️ Build Binary
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: 📦 Package Binary
+      - name: 📦 Archive Binary
         run: |
           mkdir -p release
-          cp target/${{ matrix.target }}/release/$BINARY_NAME release/
-          
-          if [[ "${{ matrix.target }}" =~ "linux" ]]; then
-            tar -czvf release/$BINARY_NAME-linux.tar.gz -C release $BINARY_NAME
-          elif [[ "${{ matrix.target }}" =~ "darwin" ]]; then
-            tar -czvf release/$BINARY_NAME-macos.tar.gz -C release $BINARY_NAME
-          fi
+          cp target/${{ matrix.target }}/release/${BINARY_NAME} release/
+          tar -czvf release/${{ matrix.archive }} -C release ${BINARY_NAME}
 
-      - name: 🚀 Create GitHub Release
+      - name: 🚀 Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.tar.gz
+          files: release/${{ matrix.archive }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
