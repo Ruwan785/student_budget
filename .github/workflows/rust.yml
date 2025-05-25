@@ -15,16 +15,13 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            archive: currency_converter-linux.tar.gz
+            archive: student_budget-linux.tar.gz
 
           - target: x86_64-apple-darwin
             os: macos-latest
-            archive: currency_converter-macos.tar.gz
+            archive: student_budget-macos.tar.gz
 
     runs-on: ${{ matrix.os }}
-
-    env:
-      BINARY_NAME: currency_converter
 
     steps:
       - name: 📥 Checkout Code
@@ -33,17 +30,22 @@ jobs:
       - name: 🦀 Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: ⚙️ Install Required Target
+      - name: ⚙️ Add Target
         run: rustup target add ${{ matrix.target }}
 
-      - name: 🏗️ Build Binary
+      - name: 📦 Build Binary
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: 📦 Archive Binary
+      - name: 🏷 Get Binary Name from Cargo
+        id: cargo-meta
+        run: |
+          echo "name=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')" >> $GITHUB_OUTPUT
+
+      - name: 📁 Prepare Release Archive
         run: |
           mkdir -p release
-          cp target/${{ matrix.target }}/release/${BINARY_NAME} release/
-          tar -czvf release/${{ matrix.archive }} -C release ${BINARY_NAME}
+          cp target/${{ matrix.target }}/release/${{ steps.cargo-meta.outputs.name }} release/
+          tar -czvf release/${{ matrix.archive }} -C release ${{ steps.cargo-meta.outputs.name }}
 
       - name: 🚀 Upload to GitHub Release
         uses: softprops/action-gh-release@v2
